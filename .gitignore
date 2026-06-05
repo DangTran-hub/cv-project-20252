@@ -26,9 +26,9 @@ env/
 # =========================
 # Dataset
 # =========================
-data/raw/
-data/images/
-data/labels/
+dataset/raw/
+dataset/images/
+dataset/labels/
 
 # (if dataset is too large)
 *.zip
