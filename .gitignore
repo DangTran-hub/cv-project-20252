@@ -29,6 +29,7 @@ env/
 dataset/raw/
 dataset/images/
 dataset/labels/
+dataset/processed
 
 # (if dataset is too large)
 *.zip
