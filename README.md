@@ -1,7 +1,7 @@
 # Multi-Object Tracking Project
 
 ## Description
-Vehicle tracking using YOLOv8 + ByteTrack. (CV-HUST-20252)
+Vehicle tracking using YOLO11n + ByteTrack. (CV-HUST-20252)
 
 ## Dataset
 Vehicle Tracking Dataset from Zenodo.
