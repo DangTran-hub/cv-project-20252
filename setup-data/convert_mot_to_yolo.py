@@ -55,8 +55,8 @@ RAW_DIR = PROJECT_ROOT / "dataset" / "raw" / "Vehicle_Tracking" / "VNTraffic"
 
 GT_PATH = RAW_DIR / "VNTraffic_GroundTruth.txt"
 
-IMAGES_DIR = PROJECT_ROOT / "dataset" / "processed" / "train" / "images"
-LABELS_DIR = PROJECT_ROOT / "dataset" / "processed" / "train" / "labels"
+IMAGES_DIR = PROJECT_ROOT / "dataset" / "processed" / "images" / "train"
+LABELS_DIR = PROJECT_ROOT / "dataset" / "processed" / "labels" / "train"
 
 DATASET_PREFIX = "zenodo_vntraffic"
 

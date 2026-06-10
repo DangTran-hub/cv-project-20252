@@ -42,7 +42,7 @@ RAW_DIR = PROJECT_ROOT / "dataset" / "raw" / "Vehicle_Tracking" / "VNTraffic"
 VIDEO_PATH = RAW_DIR / "VNTraffic_Original-video.mp4"
 GT_PATH = RAW_DIR / "VNTraffic_GroundTruth.txt"
 
-OUTPUT_IMAGES_DIR = PROJECT_ROOT / "dataset" / "processed" / "train" / "images"
+OUTPUT_IMAGES_DIR = PROJECT_ROOT / "dataset" / "processed" / "images" / "train"
 
 DATASET_PREFIX = "zenodo_vntraffic"
 
