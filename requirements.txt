@@ -3,3 +3,9 @@ utils
 imutils
 Pillow
 bytetrack
+ultralytics
+cv2
+motmetrics
+numpy
+pandas
+tqdm

@@ -1,6 +1,6 @@
 #My custom from original bytetrack configs
 
-tracker_type: bytetrack # (str) Tracker backend: botsort|bytetrack; choose bytetrack for the classic baseline
+tracker_type: bytetrack_custom # (str) Tracker backend: botsort|bytetrack; choose bytetrack for the classic baseline
 track_high_thresh: 0.4 # (float) First-stage match threshold; raise for cleaner tracks, lower to keep more
 track_low_thresh: 0.1 # (float) Second-stage threshold for low-score matches; balances recovery vs drift
 new_track_thresh: 0.5 # (float) Start a new track if no match ≥ this; higher reduces false tracks

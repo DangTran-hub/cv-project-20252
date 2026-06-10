@@ -1,7 +1,7 @@
 path: dataset/processed/
 
 train: train/images
-val: val/images
+val: valid/images
 
 names:
   0: vehicle
