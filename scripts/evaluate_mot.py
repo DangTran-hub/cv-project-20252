@@ -163,7 +163,7 @@ def iou_matrix(gt_boxes, pred_boxes):
     return distances
 
 
-def evaluate_mot(gt_path, pred_path, output_csv=None):
+def evaluate_mot(gt_path, pred_path, output_csv=None, name="baseline"):
     gt_df = read_mot_file(gt_path)
     pred_df = read_mot_file(pred_path)
 
@@ -207,7 +207,7 @@ def evaluate_mot(gt_path, pred_path, output_csv=None):
         "mostly_lost",
     ]
 
-    summary = mh.compute(acc, metrics=metrics, name="baseline")
+    summary = mh.compute(acc, metrics=metrics, name=name)
 
     print("\n===== MOT Evaluation Result =====")
     print(mm.io.render_summary(
@@ -231,6 +231,7 @@ if __name__ == "__main__":
     parser.add_argument("--gt", required=True)
     parser.add_argument("--pred", required=True)
     parser.add_argument("--out_csv", default=None)
+    parser.add_argument("--name", default="baseline")
 
     args = parser.parse_args()
 
@@ -238,4 +239,5 @@ if __name__ == "__main__":
         gt_path=args.gt,
         pred_path=args.pred,
         output_csv=args.out_csv,
+        name=args.name,
     )
