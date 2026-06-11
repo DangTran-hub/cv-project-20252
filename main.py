@@ -1,0 +1,151 @@
+from pathlib import Path
+import argparse
+
+from scripts.evaluate_mot import evaluate_mot
+from scripts.export_baseline_result import export_baseline_mot
+from scripts.render_tracking_video import render_tracking_video
+from scripts.tuned_level_1 import COCO_VEHICLE_CLASSES, parse_class_ids, run_level_1
+
+
+PROJECT_ROOT = Path(__file__).resolve().parent
+
+DEFAULT_MODEL = PROJECT_ROOT / "yolo11n.pt"
+DEFAULT_VIDEO = (
+    PROJECT_ROOT
+    / "dataset"
+    / "raw"
+    / "Vehicle_Tracking"
+    / "VNTraffic"
+    / "VNTraffic_Original-video.mp4"
+)
+DEFAULT_GT = (
+    PROJECT_ROOT
+    / "dataset"
+    / "raw"
+    / "Vehicle_Tracking"
+    / "VNTraffic"
+    / "VNTraffic_GroundTruth.txt"
+)
+BASELINE_TRACKER = PROJECT_ROOT / "configs" / "bytetrack_baseline.yaml"
+LEVEL_1_TRACKER = PROJECT_ROOT / "configs" / "bytetrack_custom.yaml"
+
+
+def resolve_classes(args):
+    if args.all_classes:
+        return None
+    if args.classes is not None:
+        return parse_class_ids(args.classes)
+    return COCO_VEHICLE_CLASSES
+
+
+def level_output_paths(level):
+    output_dir = PROJECT_ROOT / "outputs" / level
+    return {
+        "pred": output_dir / f"vntraffic_{level}_yolo11n_bytetrack.txt",
+        "metrics": output_dir / "tables" / f"vntraffic_{level}_metrics.csv",
+        "video": output_dir / f"vntraffic_{level}_yolo11n_bytetrack.mp4",
+    }
+
+
+def run_baseline(args):
+    outputs = level_output_paths("baseline")
+    classes = resolve_classes(args)
+
+    export_baseline_mot(
+        model_path=args.model,
+        video_path=args.video,
+        tracker_cfg=str(BASELINE_TRACKER),
+        output_txt=str(outputs["pred"]),
+        conf=args.conf,
+        iou=args.iou,
+        classes=classes,
+    )
+
+    evaluate_mot(
+        gt_path=args.gt,
+        pred_path=str(outputs["pred"]),
+        output_csv=str(outputs["metrics"]),
+        name="baseline",
+    )
+
+    render_tracking_video(
+        model_path=args.model,
+        video_path=args.video,
+        tracker_cfg=str(BASELINE_TRACKER),
+        output_video=str(outputs["video"]),
+        save_mot=None,
+        conf=args.conf,
+        iou=args.iou,
+        classes=classes,
+        show_class=args.show_class,
+        show_conf=args.show_conf,
+        max_frames=args.max_frames,
+        overwrite=args.overwrite,
+    )
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Run a tracking pipeline by level: baseline, level1, or level2 later."
+    )
+    parser.add_argument("--level", choices=["baseline", "level1"], default="level1")
+    parser.add_argument("--model", default=str(DEFAULT_MODEL))
+    parser.add_argument("--video", default=str(DEFAULT_VIDEO))
+    parser.add_argument("--gt", default=str(DEFAULT_GT))
+    parser.add_argument(
+        "--conf",
+        type=float,
+        default=None,
+        help="YOLO confidence threshold. Defaults to 0.25 for baseline and 0.1 for level1.",
+    )
+    parser.add_argument("--iou", type=float, default=0.5)
+    parser.add_argument(
+        "--classes",
+        nargs="*",
+        default=None,
+        help="Class IDs to keep, e.g. --classes 0 or --classes 2,3,5,7",
+    )
+    parser.add_argument("--all_classes", action="store_true")
+    parser.add_argument("--show_class", action="store_true")
+    parser.add_argument("--show_conf", action="store_true")
+    parser.add_argument("--max_frames", type=int, default=None)
+    parser.add_argument("--overwrite", action="store_true")
+    return parser.parse_args()
+
+
+def main():
+    args = parse_args()
+    if args.conf is None:
+        args.conf = 0.25 if args.level == "baseline" else 0.1
+
+    if args.level == "baseline":
+        run_baseline(args)
+        return
+
+    if args.level == "level1":
+        outputs = level_output_paths("level1")
+        run_level_1(
+            model=args.model,
+            video=args.video,
+            gt=args.gt,
+            tracker=str(LEVEL_1_TRACKER),
+            pred=str(outputs["pred"]),
+            metrics=str(outputs["metrics"]),
+            vis=str(outputs["video"]),
+            conf=args.conf,
+            iou=args.iou,
+            name="level1",
+            classes=args.classes,
+            all_classes=args.all_classes,
+            show_class=args.show_class,
+            show_conf=args.show_conf,
+            max_frames=args.max_frames,
+            overwrite=args.overwrite,
+        )
+        return
+
+    raise ValueError(f"Unsupported level: {args.level}")
+
+
+if __name__ == "__main__":
+    main()

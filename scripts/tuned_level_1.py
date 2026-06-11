@@ -1,5 +1,5 @@
 """
-Run a tuned ByteTrack experiment end-to-end.
+Run tuned tracking level 1 end-to-end.
 
 This script reuses the existing project utilities:
 - export_baseline_result.py for YOLO + ByteTrack MOT prediction export
@@ -12,7 +12,7 @@ outputs/tuned by default.
 Usage:
     Run with the project defaults:
 
-        python scripts/run_tuned_bytetrack.py --overwrite
+        python scripts/tuned_level_1.py --overwrite
 
     The default input video is:
 
@@ -43,7 +43,7 @@ Usage:
 
     Run with a custom model, video, and output paths:
 
-        python scripts/run_tuned_bytetrack.py \
+        python scripts/tuned_level_1.py \
             --model runs/detect/train/weights/best.pt \
             --video dataset/raw/Vehicle_Tracking/VNTraffic/VNTraffic_Original-video.mp4 \
             --gt dataset/raw/Vehicle_Tracking/VNTraffic/VNTraffic_GroundTruth.txt \
@@ -56,15 +56,20 @@ Usage:
 
     Useful quick-tuning command without rendering video:
 
-        python scripts/run_tuned_bytetrack.py --skip_render
+        python scripts/tuned_level_1.py --skip_render
 """
 
 from pathlib import Path
 import argparse
 
-from evaluate_mot import evaluate_mot
-from export_baseline_result import export_baseline_mot
-from render_tracking_video import render_tracking_video
+try:
+    from .evaluate_mot import evaluate_mot
+    from .export_baseline_result import export_baseline_mot
+    from .render_tracking_video import render_tracking_video
+except ImportError:
+    from evaluate_mot import evaluate_mot
+    from export_baseline_result import export_baseline_mot
+    from render_tracking_video import render_tracking_video
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -107,9 +112,87 @@ def parse_class_ids(value):
     return class_ids or None
 
 
+def resolve_classes(classes=None, all_classes=False):
+    if all_classes:
+        return None
+
+    if classes is not None:
+        return parse_class_ids(classes)
+
+    return COCO_VEHICLE_CLASSES
+
+
+def run_level_1(
+    model=str(DEFAULT_MODEL),
+    video=str(DEFAULT_VIDEO),
+    gt=str(DEFAULT_GT),
+    tracker=str(DEFAULT_TRACKER),
+    pred=str(DEFAULT_PRED),
+    metrics=str(DEFAULT_METRICS),
+    vis=str(DEFAULT_VIDEO_OUT),
+    conf=0.1,
+    iou=0.5,
+    name="tuned_level_1",
+    classes=None,
+    all_classes=False,
+    show_class=False,
+    show_conf=False,
+    max_frames=None,
+    overwrite=False,
+    skip_export=False,
+    skip_eval=False,
+    skip_render=False,
+):
+    selected_classes = resolve_classes(classes=classes, all_classes=all_classes)
+
+    if not skip_export:
+        print("===== Tuned Level 1: export MOT prediction =====")
+        export_baseline_mot(
+            model_path=model,
+            video_path=video,
+            tracker_cfg=tracker,
+            output_txt=pred,
+            conf=conf,
+            iou=iou,
+            classes=selected_classes,
+        )
+    else:
+        print(f"===== Tuned Level 1: reuse MOT prediction at {pred} =====")
+
+    if not skip_eval:
+        print("\n===== Tuned Level 1: evaluate MOT metrics =====")
+        evaluate_mot(
+            gt_path=gt,
+            pred_path=pred,
+            output_csv=metrics,
+            name=name,
+        )
+    else:
+        print("\n===== Tuned Level 1: skip MOT evaluation =====")
+
+    if not skip_render:
+        print("\n===== Tuned Level 1: render visualization video =====")
+        render_tracking_video(
+            model_path=model,
+            video_path=video,
+            tracker_cfg=tracker,
+            output_video=vis,
+            save_mot=None,
+            conf=conf,
+            iou=iou,
+            classes=selected_classes,
+            show_class=show_class,
+            show_conf=show_conf,
+            max_frames=max_frames,
+            overwrite=overwrite,
+        )
+    else:
+        print("\n===== Tuned Level 1: skip visualization rendering =====")
+
+
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Run tuned YOLO + ByteTrack export, evaluation, and visualization."
+        description="Run tuned level 1 YOLO + ByteTrack export, evaluation, and visualization."
     )
     parser.add_argument("--model", default=str(DEFAULT_MODEL), help="YOLO model path")
     parser.add_argument("--video", default=str(DEFAULT_VIDEO), help="Input video path")
@@ -120,7 +203,7 @@ def parse_args():
     parser.add_argument("--vis", default=str(DEFAULT_VIDEO_OUT), help="Output visualization video")
     parser.add_argument("--conf", type=float, default=0.1, help="YOLO confidence threshold")
     parser.add_argument("--iou", type=float, default=0.5, help="YOLO NMS IoU threshold")
-    parser.add_argument("--name", default="tuned", help="Experiment name written to the metrics table")
+    parser.add_argument("--name", default="tuned_level_1", help="Experiment name written to the metrics table")
     parser.add_argument(
         "--skip_export",
         action="store_true",
@@ -166,56 +249,27 @@ def parse_args():
 def main():
     args = parse_args()
 
-    if args.all_classes:
-        classes = None
-    elif args.classes is not None:
-        classes = parse_class_ids(args.classes)
-    else:
-        classes = COCO_VEHICLE_CLASSES
-
-    if not args.skip_export:
-        print("===== Tuned ByteTrack: export MOT prediction =====")
-        export_baseline_mot(
-            model_path=args.model,
-            video_path=args.video,
-            tracker_cfg=args.tracker,
-            output_txt=args.pred,
-            conf=args.conf,
-            iou=args.iou,
-            classes=classes,
-        )
-    else:
-        print(f"===== Tuned ByteTrack: reuse MOT prediction at {args.pred} =====")
-
-    if not args.skip_eval:
-        print("\n===== Tuned ByteTrack: evaluate MOT metrics =====")
-        evaluate_mot(
-            gt_path=args.gt,
-            pred_path=args.pred,
-            output_csv=args.metrics,
-            name=args.name,
-        )
-    else:
-        print("\n===== Tuned ByteTrack: skip MOT evaluation =====")
-
-    if not args.skip_render:
-        print("\n===== Tuned ByteTrack: render visualization video =====")
-        render_tracking_video(
-            model_path=args.model,
-            video_path=args.video,
-            tracker_cfg=args.tracker,
-            output_video=args.vis,
-            save_mot=None,
-            conf=args.conf,
-            iou=args.iou,
-            classes=classes,
-            show_class=args.show_class,
-            show_conf=args.show_conf,
-            max_frames=args.max_frames,
-            overwrite=args.overwrite,
-        )
-    else:
-        print("\n===== Tuned ByteTrack: skip visualization rendering =====")
+    run_level_1(
+        model=args.model,
+        video=args.video,
+        gt=args.gt,
+        tracker=args.tracker,
+        pred=args.pred,
+        metrics=args.metrics,
+        vis=args.vis,
+        conf=args.conf,
+        iou=args.iou,
+        name=args.name,
+        classes=args.classes,
+        all_classes=args.all_classes,
+        show_class=args.show_class,
+        show_conf=args.show_conf,
+        max_frames=args.max_frames,
+        overwrite=args.overwrite,
+        skip_export=args.skip_export,
+        skip_eval=args.skip_eval,
+        skip_render=args.skip_render,
+    )
 
 
 if __name__ == "__main__":
