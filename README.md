@@ -6,7 +6,7 @@ The main workflow is:
 
 ```text
 input:  one traffic video
-level:  baseline or level1
+level:  baseline, level1, or level2
 output: tracking video, MOT prediction txt, and MOT evaluation metrics csv
 ```
 
@@ -16,6 +16,7 @@ output: tracking video, MOT prediction txt, and MOT evaluation metrics csv
 configs/
   bytetrack_baseline.yaml    Baseline ByteTrack parameters
   bytetrack_custom.yaml      Tuned level 1 ByteTrack parameters
+  custom_tracker.yaml        Level 2 custom tracker parameters
   vehicle.yaml               YOLO dataset config
 
 scripts/
@@ -23,11 +24,21 @@ scripts/
   evaluate_mot.py            Evaluate prediction txt against MOT ground truth
   render_tracking_video.py   Render bbox and track IDs to video
   tuned_level_1.py           Level 1 tuned tracking pipeline
+  tuned_level_2.py           Level 2 local tracker pipeline
 
-main.py                      Main entrypoint for baseline/level1 pipeline
+trackers/
+  basetrack.py               Track state and ID base class
+  kalman_filter.py           Local XYAH Kalman filter
+  matching.py                IoU, score fusion, and linear assignment helpers
+  track.py                   Local ByteTrack lifecycle implementation
+  custom_byte_tracker.py     Level 2 ByteTrack variant with custom association
+  __init__.py                Local tracker exports
+
+main.py                      Main entrypoint for baseline/level1/level2 pipeline
 outputs/
   baseline/                  Baseline outputs
   level1/                    Level 1 outputs from main.py
+  level2/                    Level 2 outputs from main.py
   tuned/                     Standalone tuned_level_1.py outputs
 ```
 
@@ -71,6 +82,12 @@ Run the baseline:
 python main.py --level baseline --overwrite
 ```
 
+Run level 2 with the project-local tracker:
+
+```bash
+python main.py --level level2 --overwrite
+```
+
 The default model is `yolo11n.pt`. Because this is COCO-pretrained, the pipeline keeps only COCO vehicle classes by default:
 
 ```text
@@ -85,6 +102,14 @@ For `level1`, `main.py` writes:
 outputs/level1/vntraffic_level1_yolo11n_bytetrack.txt
 outputs/level1/tables/vntraffic_level1_metrics.csv
 outputs/level1/vntraffic_level1_yolo11n_bytetrack.mp4
+```
+
+For `level2`, `main.py` writes:
+
+```text
+outputs/level2/vntraffic_level2_yolo11n_custom_bytetrack.txt
+outputs/level2/tables/vntraffic_level2_metrics.csv
+outputs/level2/vntraffic_level2_yolo11n_custom_bytetrack.mp4
 ```
 
 For `baseline`, `main.py` writes:
@@ -183,18 +208,59 @@ For quick metric tuning without rendering video:
 python scripts/tuned_level_1.py --skip_render
 ```
 
+### Level 2
+
+Level 2 uses a local ByteTrack variant instead of `model.track(...)`.
+YOLO runs as a detector, then detections are passed to `trackers/Level2BYTETracker`.
+
+The custom association cost combines:
+
+```text
+IoU cost
+center-distance cost
+bbox shape-change cost
+detection confidence cost
+class mismatch penalty
+```
+
+Level 2 defaults:
+
+```text
+configs/custom_tracker.yaml
+YOLO confidence default: 0.08
+COCO vehicle class filter enabled by default
+```
+
+Run:
+
+```bash
+python main.py --level level2 --overwrite
+```
+
+Run the level 2 script directly:
+
+```bash
+python scripts/tuned_level_2.py --overwrite
+```
+
+For quick metric tuning without rendering video:
+
+```bash
+python scripts/tuned_level_2.py --skip_render
+```
+
 ## Useful Options
 
 ```bash
-python main.py --level level1 --show_conf --show_class --overwrite
+python main.py --level level2 --show_conf --show_class --overwrite
 ```
 
 ```bash
-python main.py --level level1 --max_frames 100 --overwrite
+python main.py --level level2 --max_frames 100 --overwrite
 ```
 
 ```bash
-python main.py --level level1 --conf 0.15 --iou 0.5 --overwrite
+python main.py --level level2 --conf 0.08 --iou 0.5 --overwrite
 ```
 
 ## Current Level 1 Result On VNTraffic
@@ -217,3 +283,25 @@ The corresponding level 1 result files are in:
 ```text
 outputs/level1/
 ```
+
+## Current Level 2 Result On VNTraffic
+
+Using `yolo11n.pt` and the default VNTraffic input:
+
+```text
+Baseline MOTA: 42.88%
+Level 1 MOTA: 43.54%
+Level 2 MOTA: 45.15%
+
+Baseline IDF1: 56.21%
+Level 1 IDF1: 57.99%
+Level 2 IDF1: 59.98%
+
+Baseline ID switches: 55
+Level 1 ID switches: 40
+Level 2 ID switches: 42
+```
+
+Level 2 improves MOTA and IDF1 over both earlier levels. It has fewer ID
+switches than baseline, but level 1 remains slightly better on ID switches.
+The level 2 result files are in `outputs/level2/`.

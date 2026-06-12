@@ -5,6 +5,7 @@ from scripts.evaluate_mot import evaluate_mot
 from scripts.export_baseline_result import export_baseline_mot
 from scripts.render_tracking_video import render_tracking_video
 from scripts.tuned_level_1 import COCO_VEHICLE_CLASSES, parse_class_ids, run_level_1
+from scripts.tuned_level_2 import run_level_2
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -28,6 +29,7 @@ DEFAULT_GT = (
 )
 BASELINE_TRACKER = PROJECT_ROOT / "configs" / "bytetrack_baseline.yaml"
 LEVEL_1_TRACKER = PROJECT_ROOT / "configs" / "bytetrack_custom.yaml"
+LEVEL_2_TRACKER = PROJECT_ROOT / "configs" / "custom_tracker.yaml"
 
 
 def resolve_classes(args):
@@ -40,10 +42,11 @@ def resolve_classes(args):
 
 def level_output_paths(level):
     output_dir = PROJECT_ROOT / "outputs" / level
+    tracker_name = "custom_bytetrack" if level == "level2" else "bytetrack"
     return {
-        "pred": output_dir / f"vntraffic_{level}_yolo11n_bytetrack.txt",
+        "pred": output_dir / f"vntraffic_{level}_yolo11n_{tracker_name}.txt",
         "metrics": output_dir / "tables" / f"vntraffic_{level}_metrics.csv",
-        "video": output_dir / f"vntraffic_{level}_yolo11n_bytetrack.mp4",
+        "video": output_dir / f"vntraffic_{level}_yolo11n_{tracker_name}.mp4",
     }
 
 
@@ -86,9 +89,9 @@ def run_baseline(args):
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Run a tracking pipeline by level: baseline, level1, or level2 later."
+        description="Run a tracking pipeline by level: baseline, level1, or level2."
     )
-    parser.add_argument("--level", choices=["baseline", "level1"], default="level1")
+    parser.add_argument("--level", choices=["baseline", "level1", "level2"], default="level1")
     parser.add_argument("--model", default=str(DEFAULT_MODEL))
     parser.add_argument("--video", default=str(DEFAULT_VIDEO))
     parser.add_argument("--gt", default=str(DEFAULT_GT))
@@ -96,7 +99,7 @@ def parse_args():
         "--conf",
         type=float,
         default=None,
-        help="YOLO confidence threshold. Defaults to 0.25 for baseline and 0.1 for level1.",
+        help="YOLO confidence threshold. Defaults to 0.25 for baseline, 0.1 for level1, and 0.08 for level2.",
     )
     parser.add_argument("--iou", type=float, default=0.5)
     parser.add_argument(
@@ -116,7 +119,12 @@ def parse_args():
 def main():
     args = parse_args()
     if args.conf is None:
-        args.conf = 0.25 if args.level == "baseline" else 0.1
+        if args.level == "baseline":
+            args.conf = 0.25
+        elif args.level == "level2":
+            args.conf = 0.08
+        else:
+            args.conf = 0.1
 
     if args.level == "baseline":
         run_baseline(args)
@@ -135,6 +143,28 @@ def main():
             conf=args.conf,
             iou=args.iou,
             name="level1",
+            classes=args.classes,
+            all_classes=args.all_classes,
+            show_class=args.show_class,
+            show_conf=args.show_conf,
+            max_frames=args.max_frames,
+            overwrite=args.overwrite,
+        )
+        return
+
+    if args.level == "level2":
+        outputs = level_output_paths("level2")
+        run_level_2(
+            model=args.model,
+            video=args.video,
+            gt=args.gt,
+            tracker=str(LEVEL_2_TRACKER),
+            pred=str(outputs["pred"]),
+            metrics=str(outputs["metrics"]),
+            vis=str(outputs["video"]),
+            conf=args.conf,
+            iou=args.iou,
+            name="level2",
             classes=args.classes,
             all_classes=args.all_classes,
             show_class=args.show_class,
