@@ -1,11 +1,11 @@
 torch
-utils
-imutils
-Pillow
-bytetrack
 ultralytics
-cv2
+opencv-python
 motmetrics
 numpy
 pandas
 tqdm
+PyYAML
+matplotlib
+scipy
+Pillow

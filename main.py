@@ -1,11 +1,18 @@
 from pathlib import Path
 import argparse
+import os
+import tempfile
+
+os.environ.setdefault(
+    "MPLCONFIGDIR",
+    str(Path(tempfile.gettempdir()) / "matplotlib-cache"),
+)
 
 from scripts.evaluate_mot import evaluate_mot
 from scripts.export_baseline_result import export_baseline_mot
 from scripts.render_tracking_video import render_tracking_video
 from scripts.tuned_level_1 import COCO_VEHICLE_CLASSES, parse_class_ids, run_level_1
-from scripts.tuned_level_2 import run_level_2
+from scripts.tuned_level_2 import export_level_2_mot, run_level_2
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -50,8 +57,37 @@ def level_output_paths(level):
     }
 
 
-def run_baseline(args):
-    outputs = level_output_paths("baseline")
+def get_outputs(args):
+    outputs = level_output_paths(args.level)
+    if args.pred is not None:
+        outputs["pred"] = Path(args.pred)
+    if args.metrics is not None:
+        outputs["metrics"] = Path(args.metrics)
+    if args.output_video is not None:
+        outputs["video"] = Path(args.output_video)
+    return outputs
+
+
+def tracker_for_level(level):
+    if level == "baseline":
+        return BASELINE_TRACKER
+    if level == "level1":
+        return LEVEL_1_TRACKER
+    if level == "level2":
+        return LEVEL_2_TRACKER
+    raise ValueError(f"Unsupported level: {level}")
+
+
+def ensure_ground_truth(args):
+    gt_path = Path(args.gt)
+    if not gt_path.is_file():
+        raise FileNotFoundError(
+            f"Ground truth file not found: {gt_path}. "
+            "Use --no_gt for videos without ground truth."
+        )
+
+
+def run_baseline_with_gt(args, outputs):
     classes = resolve_classes(args)
 
     export_baseline_mot(
@@ -87,14 +123,73 @@ def run_baseline(args):
     )
 
 
+def run_tracking_only(args, outputs):
+    classes = resolve_classes(args)
+    tracker = tracker_for_level(args.level)
+
+    if args.level in {"baseline", "level1"}:
+        render_tracking_video(
+            model_path=args.model,
+            video_path=args.video,
+            tracker_cfg=str(tracker),
+            output_video=str(outputs["video"]),
+            save_mot=None,
+            conf=args.conf,
+            iou=args.iou,
+            classes=classes,
+            show_class=args.show_class,
+            show_conf=args.show_conf,
+            max_frames=args.max_frames,
+            overwrite=args.overwrite,
+        )
+        return
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_pred = Path(tmp_dir) / "level2_prediction.txt"
+        export_level_2_mot(
+            model_path=args.model,
+            video_path=args.video,
+            tracker_cfg=str(tracker),
+            output_txt=str(tmp_pred),
+            output_video=str(outputs["video"]),
+            conf=args.conf,
+            iou=args.iou,
+            classes=classes,
+            show_class=args.show_class,
+            show_conf=args.show_conf,
+            max_frames=args.max_frames,
+            overwrite=args.overwrite,
+        )
+
+
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Run a tracking pipeline by level: baseline, level1, or level2."
+        description=(
+            "Run video tracking with baseline, level1, or level2. "
+            "Use --with_gt for metrics, or --no_gt for tracking video only."
+        )
     )
     parser.add_argument("--level", choices=["baseline", "level1", "level2"], default="level1")
     parser.add_argument("--model", default=str(DEFAULT_MODEL))
     parser.add_argument("--video", default=str(DEFAULT_VIDEO))
     parser.add_argument("--gt", default=str(DEFAULT_GT))
+    gt_group = parser.add_mutually_exclusive_group()
+    gt_group.add_argument(
+        "--with_gt",
+        dest="has_gt",
+        action="store_true",
+        default=True,
+        help="Evaluate against ground truth and write metrics. This is the default.",
+    )
+    gt_group.add_argument(
+        "--no_gt",
+        dest="has_gt",
+        action="store_false",
+        help="Run tracking only and write only the visualization video.",
+    )
+    parser.add_argument("--output_video", default=None, help="Custom output tracking video path")
+    parser.add_argument("--pred", default=None, help="Custom MOT prediction txt path for --with_gt runs")
+    parser.add_argument("--metrics", default=None, help="Custom metrics CSV path for --with_gt runs")
     parser.add_argument(
         "--conf",
         type=float,
@@ -126,12 +221,19 @@ def main():
         else:
             args.conf = 0.1
 
+    outputs = get_outputs(args)
+
+    if not args.has_gt:
+        run_tracking_only(args, outputs)
+        return
+
+    ensure_ground_truth(args)
+
     if args.level == "baseline":
-        run_baseline(args)
+        run_baseline_with_gt(args, outputs)
         return
 
     if args.level == "level1":
-        outputs = level_output_paths("level1")
         run_level_1(
             model=args.model,
             video=args.video,
@@ -153,7 +255,6 @@ def main():
         return
 
     if args.level == "level2":
-        outputs = level_output_paths("level2")
         run_level_2(
             model=args.model,
             video=args.video,
